@@ -1,0 +1,157 @@
+{% extends 'base.html' %}
+{% block title %}Trabajos – Contratista Rural{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="fw-bold mb-0"><i class="bi bi-file-earmark-text me-2"></i>Trabajos</h4>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuevo">
+    <i class="bi bi-plus-lg me-1"></i>Nuevo trabajo
+  </button>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    {% if trabajos %}
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Cliente</th>
+          <th>Tipo</th>
+          <th>Campo / Cultivo</th>
+          <th class="text-end">Ha</th>
+          <th class="text-end">$/ha</th>
+          <th class="text-end">Total</th>
+          <th>Fecha trabajo</th>
+          <th>Cobro estimado</th>
+          <th>Estado</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in trabajos %}
+        <tr>
+          <td class="fw-semibold">{{ t.cliente_nombre }}</td>
+          <td>
+            <span class="badge badge-{{ t.tipo }}">{{ t.tipo|capitalize }}</span>
+          </td>
+          <td class="text-muted small">
+            {{ t.campo or '' }}{% if t.campo and t.cultivo %} / {% endif %}{{ t.cultivo or '' }}
+          </td>
+          <td class="text-end">{{ "{:,.0f}".format(t.hectareas) }}</td>
+          <td class="text-end">${{ "{:,.0f}".format(t.precio_ha) }}</td>
+          <td class="text-end fw-semibold">${{ "{:,.0f}".format(t.total) }}</td>
+          <td>{{ t.fecha_trabajo or '—' }}</td>
+          <td>{{ t.fecha_cobro_estimada or '—' }}</td>
+          <td>
+            <form method="POST" action="/trabajos/{{ t.id }}/estado" class="d-inline">
+              <select name="estado" class="form-select form-select-sm"
+                      onchange="this.form.submit()"
+                      style="min-width:130px">
+                {% for op in ['presupuestado','en_curso','terminado','cobrado'] %}
+                <option value="{{ op }}" {{ 'selected' if t.estado == op }}>
+                  {{ op|replace('_',' ')|capitalize }}
+                </option>
+                {% endfor %}
+              </select>
+            </form>
+          </td>
+          <td class="d-flex gap-1">
+            <a href="/trabajos/{{ t.id }}/remito" target="_blank"
+               class="btn btn-sm btn-outline-secondary" title="Ver remito">
+              <i class="bi bi-file-text"></i>
+            </a>
+            <form method="POST" action="/trabajos/{{ t.id }}/eliminar"
+                  onsubmit="return confirm('¿Eliminar este trabajo?')">
+              <button class="btn btn-sm btn-outline-danger">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-file-earmark-text fs-1"></i>
+      <p class="mt-2">Todavía no hay trabajos cargados.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Modal nuevo trabajo -->
+<div class="modal fade" id="modalNuevo" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <form method="POST" action="/trabajos/nuevo" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Nuevo trabajo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Cliente *</label>
+            <select name="cliente_id" class="form-select" required>
+              <option value="">— Seleccionar —</option>
+              {% for c in clientes %}
+              <option value="{{ c.id }}">{{ c.nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Tipo *</label>
+            <select name="tipo" class="form-select" required>
+              <option value="cosecha">Cosecha</option>
+              <option value="siembra">Siembra</option>
+              <option value="fumigacion">Fumigación</option>
+              <option value="otro">Otro</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Campo</label>
+            <input type="text" name="campo" class="form-control" placeholder="Nombre o ubicación">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Cultivo</label>
+            <input type="text" name="cultivo" class="form-control" placeholder="Soja, maíz, trigo...">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Hectáreas *</label>
+            <input type="number" name="hectareas" class="form-control" step="0.1" min="0" required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Precio por hectárea ($) *</label>
+            <input type="number" name="precio_ha" class="form-control" step="0.01" min="0" required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Estado</label>
+            <select name="estado" class="form-select">
+              <option value="presupuestado">Presupuestado</option>
+              <option value="en_curso">En curso</option>
+              <option value="terminado">Terminado</option>
+              <option value="cobrado">Cobrado</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Fecha del trabajo</label>
+            <input type="date" name="fecha_trabajo" class="form-control">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Fecha cobro estimada</label>
+            <input type="date" name="fecha_cobro_estimada" class="form-control">
+          </div>
+          <div class="col-12">
+            <label class="form-label fw-semibold">Notas</label>
+            <textarea name="notas" class="form-control" rows="2"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,168 @@
+{% extends 'base.html' %}
+{% block title %}Cereales – Contratista Rural{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <h4 class="fw-bold mb-0"><i class="bi bi-basket me-2"></i>Ventas de cereales</h4>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuevo">
+    <i class="bi bi-plus-lg me-1"></i>Nueva venta
+  </button>
+</div>
+
+{% if cereales %}
+{% set ns = namespace(pendiente=0, cobrado=0) %}
+{% for v in cereales %}
+  {% if v.estado == 'pendiente' %}{% set ns.pendiente = ns.pendiente + v.toneladas * v.precio_ton %}
+  {% else %}{% set ns.cobrado = ns.cobrado + v.toneladas * v.precio_ton %}{% endif %}
+{% endfor %}
+<div class="row g-3 mb-4">
+  <div class="col-md-6">
+    <div class="card p-3 text-center">
+      <div class="small text-muted">Pendiente de cobro</div>
+      <div class="fs-5 fw-bold text-warning">${{ "{:,.0f}".format(ns.pendiente) }}</div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card p-3 text-center">
+      <div class="small text-muted">Cobrado</div>
+      <div class="fs-5 fw-bold text-success">${{ "{:,.0f}".format(ns.cobrado) }}</div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-body p-0">
+    {% if cereales %}
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Cereal</th><th>Fecha venta</th><th class="text-end">Toneladas</th>
+          <th class="text-end">$/tn</th><th class="text-end">Total</th>
+          <th>Comprador</th><th>Cobro</th><th>Fecha cobro</th><th>Estado</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for v in cereales %}
+        <tr>
+          <td class="fw-semibold">{{ v.cereal|capitalize }}</td>
+          <td>{{ v.fecha }}</td>
+          <td class="text-end">{{ "{:,.1f}".format(v.toneladas) }}</td>
+          <td class="text-end">${{ "{:,.0f}".format(v.precio_ton) }}</td>
+          <td class="text-end fw-semibold">${{ "{:,.0f}".format(v.toneladas * v.precio_ton) }}</td>
+          <td class="text-muted small">{{ v.comprador or '—' }}</td>
+          <td class="text-muted small">{{ v.forma_cobro }}</td>
+          <td class="text-muted small">{{ v.fecha_cobro or '—' }}</td>
+          <td>
+            <form method="POST" action="/cereales/{{ v.id }}/estado">
+              <select name="estado" class="form-select form-select-sm" onchange="this.form.submit()" style="min-width:110px">
+                <option value="pendiente" {{ 'selected' if v.estado=='pendiente' }}>Pendiente</option>
+                <option value="cobrado"   {{ 'selected' if v.estado=='cobrado' }}>Cobrado</option>
+              </select>
+            </form>
+          </td>
+          <td>
+            <form method="POST" action="/cereales/{{ v.id }}/eliminar"
+                  onsubmit="return confirm('¿Eliminar esta venta?')">
+              <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-basket fs-1"></i>
+      <p class="mt-2">No hay ventas de cereales cargadas.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Modal nueva venta -->
+<div class="modal fade" id="modalNuevo" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <form method="POST" action="/cereales/nuevo" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Nueva venta de cereal</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Cereal *</label>
+            <select name="cereal" class="form-select" required>
+              <option value="soja">Soja</option>
+              <option value="maiz">Maíz</option>
+              <option value="trigo">Trigo</option>
+              <option value="girasol">Girasol</option>
+              <option value="sorgo">Sorgo</option>
+              <option value="otro">Otro</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Toneladas *</label>
+            <input type="number" name="toneladas" id="tnInput" class="form-control"
+                   step="0.01" min="0" required oninput="calcTotal()">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Precio por tonelada ($) *</label>
+            <input type="number" name="precio_ton" id="precioInput" class="form-control"
+                   step="0.01" min="0" required oninput="calcTotal()">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Total estimado</label>
+            <div class="form-control bg-light fw-bold text-success" id="totalCereal">—</div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Fecha de venta *</label>
+            <input type="date" name="fecha" class="form-control" required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Comprador</label>
+            <input type="text" name="comprador" class="form-control">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Forma de cobro *</label>
+            <select name="forma_cobro" class="form-select" required>
+              <option value="transferencia">Transferencia</option>
+              <option value="efectivo">Efectivo</option>
+              <option value="cheque">Cheque</option>
+              <option value="a_fijar">A fijar</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Fecha de cobro</label>
+            <input type="date" name="fecha_cobro" class="form-control">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Estado</label>
+            <select name="estado" class="form-select">
+              <option value="pendiente">Pendiente</option>
+              <option value="cobrado">Cobrado</option>
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label fw-semibold">Notas</label>
+            <textarea name="notas" class="form-control" rows="2"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function calcTotal() {
+  const tn    = parseFloat(document.getElementById('tnInput').value) || 0;
+  const precio = parseFloat(document.getElementById('precioInput').value) || 0;
+  const el    = document.getElementById('totalCereal');
+  el.textContent = tn && precio ? '$' + (tn * precio).toLocaleString('es-AR', {maximumFractionDigits:0}) : '—';
+}
+</script>
+{% endblock %}

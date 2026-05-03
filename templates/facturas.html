@@ -1,0 +1,291 @@
+{% extends 'base.html' %}
+{% block title %}Facturas – Contratista Rural{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+  <h4 class="fw-bold mb-0"><i class="bi bi-file-earmark-check me-2"></i>Facturas</h4>
+  <div class="d-flex gap-2">
+    <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalMargen">
+      <i class="bi bi-sliders me-1"></i>Margen: {{ margen }} días
+    </button>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuevo">
+      <i class="bi bi-plus-lg me-1"></i>Nueva factura
+    </button>
+  </div>
+</div>
+<p class="text-muted small mb-4">
+  El margen de <strong>{{ margen }} días</strong> se suma al vencimiento para calcular cuándo es seguro emitir cheques contra esa plata.
+</p>
+
+{% if facturas %}
+{% set ns = namespace(pendiente=0, cobrada=0, vencida=0) %}
+{% for f in facturas %}
+  {% if f.estado == 'pendiente' %}{% set ns.pendiente = ns.pendiente + f.monto %}
+  {% elif f.estado == 'cobrada' %}{% set ns.cobrada = ns.cobrada + f.monto %}
+  {% else %}{% set ns.vencida = ns.vencida + f.monto %}{% endif %}
+{% endfor %}
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="card p-3 text-center">
+      <div class="small text-muted">Pendientes de cobro</div>
+      <div class="fs-5 fw-bold text-warning">${{ "{:,.0f}".format(ns.pendiente) }}</div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card p-3 text-center">
+      <div class="small text-muted">Cobradas</div>
+      <div class="fs-5 fw-bold text-success">${{ "{:,.0f}".format(ns.cobrada) }}</div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card p-3 text-center">
+      <div class="small text-muted">Vencidas sin cobrar</div>
+      <div class="fs-5 fw-bold text-danger">${{ "{:,.0f}".format(ns.vencida) }}</div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-body p-0">
+    {% if facturas %}
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>N° Factura</th><th>Cliente</th><th>Trabajo</th>
+          <th class="text-end">Monto</th><th>Emisión</th><th>Plazo</th>
+          <th>Vencimiento</th><th>Fecha segura <small class="text-muted">(+{{ margen }}d)</small></th>
+          <th>Estado</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in facturas %}
+        <tr class="{{ 'table-danger bg-opacity-10' if f.estado == 'vencida' }}">
+          <td class="fw-semibold">{{ f.numero or '—' }}</td>
+          <td>{{ f.cliente_nombre }}</td>
+          <td class="text-muted small">{{ f.trabajo_tipo|capitalize if f.trabajo_tipo else '—' }}</td>
+          <td class="text-end fw-semibold">${{ "{:,.0f}".format(f.monto) }}</td>
+          <td>{{ f.fecha_emision }}</td>
+          <td class="text-muted small">{{ f.dias_pago }} días</td>
+          <td class="{{ 'text-danger fw-semibold' if f.estado == 'pendiente' and f.fecha_vencimiento < hoy }}">
+            {{ f.fecha_vencimiento }}
+            {% if f.estado == 'pendiente' and f.fecha_vencimiento < hoy %}
+              <i class="bi bi-exclamation-circle-fill text-danger ms-1"></i>
+            {% endif %}
+          </td>
+          <td class="fw-semibold text-primary small">
+            +{{ margen }}d después del {{ f.fecha_vencimiento }}
+          </td>
+          <td>
+            <form method="POST" action="/facturas/{{ f.id }}/estado" class="d-inline">
+              <select name="estado" class="form-select form-select-sm"
+                      onchange="this.form.submit()" style="min-width:110px">
+                <option value="pendiente" {{ 'selected' if f.estado=='pendiente' }}>Pendiente</option>
+                <option value="cobrada"   {{ 'selected' if f.estado=='cobrada' }}>Cobrada</option>
+                <option value="vencida"   {{ 'selected' if f.estado=='vencida' }}>Vencida</option>
+              </select>
+            </form>
+          </td>
+          <td>
+            <form method="POST" action="/facturas/{{ f.id }}/eliminar"
+                  onsubmit="return confirm('¿Eliminar esta factura?')">
+              <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-file-earmark-check fs-1"></i>
+      <p class="mt-2">Todavía no hay facturas cargadas.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Modal nueva factura -->
+<div class="modal fade" id="modalNuevo" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <form method="POST" action="/facturas/nuevo" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Nueva factura</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">N° de factura</label>
+            <input type="text" name="numero" class="form-control" placeholder="Ej: 0001-00000123">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Cliente *</label>
+            <select name="cliente_id" class="form-select" required>
+              <option value="">— Seleccionar —</option>
+              {% for c in clientes %}
+              <option value="{{ c.id }}">{{ c.nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Monto ($) *</label>
+            <input type="number" name="monto" id="montoFactura" class="form-control"
+                   step="0.01" min="0" required oninput="calcularPrecioHa()">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Fecha de emisión *</label>
+            <input type="date" name="fecha_emision" id="fechaEmision" class="form-control"
+                   required onchange="calcularVencimiento()">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Plazo de cobro (días) *</label>
+            <input type="number" name="dias_pago" id="diasPago" class="form-control"
+                   value="30" min="1" required onchange="calcularVencimiento()">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Estado</label>
+            <select name="estado" class="form-select">
+              <option value="pendiente">Pendiente</option>
+              <option value="cobrada">Cobrada</option>
+              <option value="vencida">Vencida</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Vencimiento (calculado)</label>
+            <div class="form-control bg-light fw-bold text-primary" id="fechaVence">—</div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Fecha segura (+{{ margen }} días)</label>
+            <div class="form-control bg-light fw-bold text-success" id="fechaSegura">—</div>
+          </div>
+
+          <!-- Sección trabajo -->
+          <div class="col-12">
+            <hr class="my-1">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="crearTrabajo" onchange="toggleTrabajo()">
+              <label class="form-check-label fw-semibold" for="crearTrabajo">
+                Crear trabajo asociado automáticamente
+              </label>
+            </div>
+            <div class="text-muted small mt-1">
+              Activá esto para crear el trabajo y vincularlo a la factura (sin duplicados en el dashboard).
+              O bien, elegí un trabajo existente abajo.
+            </div>
+          </div>
+
+          <div class="col-12" id="trabajoExistenteRow">
+            <label class="form-label fw-semibold">Vincular trabajo existente</label>
+            <select name="trabajo_id" class="form-select">
+              <option value="">— Sin vincular —</option>
+              {% for t in trabajos %}
+              <option value="{{ t.id }}">{{ t.label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div id="camposTrabajo" style="display:none" class="col-12">
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">Tipo de trabajo *</label>
+                <select name="tipo_trabajo" class="form-select">
+                  <option value="cosecha">Cosecha</option>
+                  <option value="siembra">Siembra</option>
+                  <option value="fumigacion">Fumigación</option>
+                  <option value="otro">Otro</option>
+                </select>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">Cultivo</label>
+                <input type="text" name="cultivo" class="form-control" placeholder="Ej: soja, maíz">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">Campo</label>
+                <input type="text" name="campo" class="form-control" placeholder="Ej: La Esperanza">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">Hectáreas</label>
+                <input type="number" name="hectareas" id="hectareasInput" class="form-control"
+                       step="0.01" min="0" placeholder="0" oninput="calcularPrecioHa()">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">Precio / ha ($)</label>
+                <input type="number" name="precio_ha" id="precioHaInput" class="form-control"
+                       step="0.01" min="0" placeholder="Se calcula del monto">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">Fecha del trabajo</label>
+                <input type="date" name="fecha_trabajo" class="form-control">
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label fw-semibold">Notas</label>
+            <textarea name="notas" class="form-control" rows="2"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal margen -->
+<div class="modal fade" id="modalMargen" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <form method="POST" action="/config/margen" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-sliders me-1"></i>Margen de seguridad</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted">Días extra que el sistema espera después del vencimiento de una factura antes de considerarla disponible para emitir cheques.</p>
+        <div class="input-group">
+          <input type="number" name="margen_cobro_dias" class="form-control"
+                 value="{{ margen }}" min="0" max="30" required>
+          <span class="input-group-text">días</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+const MARGEN = {{ margen }};
+
+function calcularVencimiento() {
+  const fechaStr = document.getElementById('fechaEmision').value;
+  const dias     = parseInt(document.getElementById('diasPago').value) || 0;
+  if (!fechaStr || !dias) return;
+  const fecha  = new Date(fechaStr + 'T00:00:00');
+  const vence  = new Date(fecha); vence.setDate(vence.getDate() + dias);
+  const segura = new Date(vence); segura.setDate(segura.getDate() + MARGEN);
+  const fmt = d => d.toISOString().split('T')[0];
+  document.getElementById('fechaVence').textContent  = fmt(vence);
+  document.getElementById('fechaSegura').textContent = fmt(segura);
+}
+
+function toggleTrabajo() {
+  const crear = document.getElementById('crearTrabajo').checked;
+  document.getElementById('camposTrabajo').style.display      = crear ? '' : 'none';
+  document.getElementById('trabajoExistenteRow').style.display = crear ? 'none' : '';
+  if (crear) calcularPrecioHa();
+}
+
+function calcularPrecioHa() {
+  const monto = parseFloat(document.getElementById('montoFactura').value) || 0;
+  const ha    = parseFloat(document.getElementById('hectareasInput').value) || 0;
+  const el    = document.getElementById('precioHaInput');
+  if (monto && ha) el.value = (monto / ha).toFixed(2);
+}
+</script>
+{% endblock %}

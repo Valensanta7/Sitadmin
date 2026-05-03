@@ -1,0 +1,200 @@
+{% extends 'base.html' %}
+{% block title %}Cheques – Contratista Rural{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="fw-bold mb-0"><i class="bi bi-cash-stack me-2"></i>Cheques</h4>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuevo">
+    <i class="bi bi-plus-lg me-1"></i>Nuevo cheque
+  </button>
+</div>
+
+<!-- Filtros rápidos -->
+<div class="mb-3 d-flex gap-2 flex-wrap">
+  <button class="btn btn-sm btn-outline-secondary filtro active" data-filtro="todos">Todos</button>
+  <button class="btn btn-sm btn-outline-danger filtro" data-filtro="propio_emitido">A pagar (propios)</button>
+  <button class="btn btn-sm btn-outline-success filtro" data-filtro="tercero_recibido">A cobrar (terceros)</button>
+  <button class="btn btn-sm btn-outline-warning filtro" data-filtro="pendiente">Pendientes</button>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    {% if cheques %}
+    <table class="table table-hover mb-0" id="tablaCheques">
+      <thead class="table-light">
+        <tr>
+          <th>Vencimiento</th>
+          <th>Movimiento</th>
+          <th>Modalidad</th>
+          <th>N°</th>
+          <th>Banco</th>
+          <th>Contraparte</th>
+          <th class="text-end">Monto</th>
+          <th>Trabajo vinculado</th>
+          <th>Estado</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in cheques %}
+        <tr data-movimiento="{{ c.tipo_movimiento }}" data-estado="{{ c.estado }}"
+            class="{{ 'table-danger bg-opacity-10' if c.tipo_movimiento == 'propio_emitido' else 'table-success bg-opacity-10' }}">
+          <td class="fw-semibold
+            {% if c.fecha_vencimiento <= hoy and c.estado == 'pendiente' %} text-danger {% endif %}">
+            {{ c.fecha_vencimiento }}
+            {% if c.fecha_vencimiento <= hoy and c.estado == 'pendiente' %}
+            <i class="bi bi-exclamation-circle-fill text-danger ms-1"></i>
+            {% endif %}
+          </td>
+          <td>
+            {% if c.tipo_movimiento == 'propio_emitido' %}
+              <span class="badge bg-danger">A pagar</span>
+            {% else %}
+              <span class="badge bg-success">A cobrar</span>
+            {% endif %}
+          </td>
+          <td>
+            <span class="badge {{ 'bg-dark' if c.modalidad == 'echeq' else 'bg-secondary' }}">
+              {{ c.modalidad|upper }}
+            </span>
+          </td>
+          <td class="text-muted small">{{ c.numero or '—' }}</td>
+          <td class="text-muted small">{{ c.banco or '—' }}</td>
+          <td>{{ c.contraparte }}</td>
+          <td class="text-end fw-semibold">${{ "{:,.0f}".format(c.monto) }}</td>
+          <td class="text-muted small">
+            {% if c.cliente_nombre %}{{ c.cliente_nombre }} / {{ c.trabajo_tipo }}{% else %}—{% endif %}
+          </td>
+          <td>
+            <form method="POST" action="/cheques/{{ c.id }}/estado" class="d-inline">
+              <select name="estado" class="form-select form-select-sm"
+                      onchange="this.form.submit()" style="min-width:120px">
+                {% for op in ['pendiente','depositado','acreditado','rechazado','anulado'] %}
+                <option value="{{ op }}" {{ 'selected' if c.estado == op }}>
+                  {{ op|capitalize }}
+                </option>
+                {% endfor %}
+              </select>
+            </form>
+          </td>
+          <td>
+            <form method="POST" action="/cheques/{{ c.id }}/eliminar"
+                  onsubmit="return confirm('¿Eliminar este cheque?')">
+              <button class="btn btn-sm btn-outline-danger">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-cash-stack fs-1"></i>
+      <p class="mt-2">Todavía no hay cheques cargados.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Modal nuevo cheque -->
+<div class="modal fade" id="modalNuevo" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <form method="POST" action="/cheques/nuevo" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Nuevo cheque</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Tipo de movimiento *</label>
+            <select name="tipo_movimiento" class="form-select" required>
+              <option value="propio_emitido">Propio emitido (yo pago)</option>
+              <option value="tercero_recibido">De tercero recibido (me pagan)</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Modalidad *</label>
+            <select name="modalidad" class="form-select" required>
+              <option value="fisico">Físico</option>
+              <option value="echeq">ECHEQ (electrónico)</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Contraparte * <small class="text-muted">(a quién pago / quién me paga)</small></label>
+            <input type="text" name="contraparte" class="form-control" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Monto ($) *</label>
+            <input type="number" name="monto" class="form-control" step="0.01" min="0" required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">N° de cheque</label>
+            <input type="text" name="numero" class="form-control">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Banco</label>
+            <input type="text" name="banco" class="form-control">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Estado</label>
+            <select name="estado" class="form-select">
+              <option value="pendiente">Pendiente</option>
+              <option value="depositado">Depositado</option>
+              <option value="acreditado">Acreditado</option>
+              <option value="rechazado">Rechazado</option>
+              <option value="anulado">Anulado</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Fecha de emisión</label>
+            <input type="date" name="fecha_emision" class="form-control">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Fecha de vencimiento *</label>
+            <input type="date" name="fecha_vencimiento" class="form-control" required>
+          </div>
+          <div class="col-12">
+            <label class="form-label fw-semibold">Vincular a trabajo (opcional)</label>
+            <select name="trabajo_id" class="form-select">
+              <option value="">— Sin vincular —</option>
+              {% for t in trabajos %}
+              <option value="{{ t.id }}">{{ t.label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label fw-semibold">Notas</label>
+            <textarea name="notas" class="form-control" rows="2"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('.filtro').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.filtro').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+    const filtro = this.dataset.filtro;
+    document.querySelectorAll('#tablaCheques tbody tr').forEach(row => {
+      if (filtro === 'todos') {
+        row.style.display = '';
+      } else if (filtro === 'pendiente') {
+        row.style.display = row.dataset.estado === 'pendiente' ? '' : 'none';
+      } else {
+        row.style.display = row.dataset.movimiento === filtro ? '' : 'none';
+      }
+    });
+  });
+});
+</script>
+{% endblock %}

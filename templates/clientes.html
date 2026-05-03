@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+{% block title %}Clientes – Contratista Rural{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="fw-bold mb-0"><i class="bi bi-people me-2"></i>Clientes</h4>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuevo">
+    <i class="bi bi-plus-lg me-1"></i>Nuevo cliente
+  </button>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    {% if clientes %}
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Nombre</th>
+          <th>Localidad</th>
+          <th>Teléfono</th>
+          <th class="text-end">Deuda pendiente</th>
+          <th>Notas</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in clientes %}
+        {% set debe = deuda.get(c.id, 0) %}
+        <tr>
+          <td class="fw-semibold">{{ c.nombre }}</td>
+          <td>{{ c.localidad or '—' }}</td>
+          <td>{{ c.telefono or '—' }}</td>
+          <td class="text-end fw-semibold">
+            {% if debe > 0 %}
+              <span class="text-danger">${{ "{:,.0f}".format(debe) }}</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td class="text-muted small">{{ c.notas or '' }}</td>
+          <td class="text-end">
+            <form method="POST" action="/clientes/{{ c.id }}/eliminar"
+                  onsubmit="return confirm('¿Eliminar cliente {{ c.nombre }}?')">
+              <button class="btn btn-sm btn-outline-danger">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-people fs-1"></i>
+      <p class="mt-2">Todavía no hay clientes cargados.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Modal nuevo cliente -->
+<div class="modal fade" id="modalNuevo" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="POST" action="/clientes/nuevo" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Nuevo cliente</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Nombre / Razón social *</label>
+          <input type="text" name="nombre" class="form-control" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Localidad</label>
+          <input type="text" name="localidad" class="form-control">
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Teléfono</label>
+          <input type="text" name="telefono" class="form-control">
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Notas</label>
+          <textarea name="notas" class="form-control" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

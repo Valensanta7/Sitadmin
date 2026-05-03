@@ -1,0 +1,274 @@
+{% extends 'base.html' %}
+{% block title %}Reporte {{ mes_nombre }} {{ anio }} – Contratista Rural{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <h4 class="fw-bold mb-0"><i class="bi bi-bar-chart-line me-2"></i>Reporte mensual</h4>
+  <button onclick="window.print()" class="btn btn-outline-secondary">
+    <i class="bi bi-printer me-1"></i>Imprimir
+  </button>
+</div>
+
+<!-- Selector de mes -->
+<form method="GET" action="/reporte" class="card p-3 mb-4 d-flex flex-row gap-3 align-items-end flex-wrap">
+  <div>
+    <label class="form-label fw-semibold mb-1">Mes</label>
+    <select name="mes" class="form-select" style="width:160px">
+      {% for i, nombre in enumerate(meses) %}
+      <option value="{{ i+1 }}" {{ 'selected' if mes == i+1 }}>{{ nombre }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label class="form-label fw-semibold mb-1">Año</label>
+    <select name="anio" class="form-select" style="width:100px">
+      {% for a in anios %}
+      <option value="{{ a }}" {{ 'selected' if anio == a }}>{{ a }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button type="submit" class="btn btn-primary">Ver reporte</button>
+</form>
+
+<h5 class="fw-bold mb-3">{{ mes_nombre }} {{ anio }}</h5>
+
+<!-- Resumen ejecutivo -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card p-3 text-center">
+      <div class="small text-muted">Trabajos del mes</div>
+      <div class="fs-5 fw-bold text-primary">${{ "{:,.0f}".format(total_trabajos) }}</div>
+      <div class="small text-muted">facturado</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card p-3 text-center">
+      <div class="small text-muted">Total cobrado</div>
+      <div class="fs-5 fw-bold text-success">${{ "{:,.0f}".format(total_cobrado) }}</div>
+      <div class="small text-muted">cheques + transf. + facturas + cereales</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card p-3 text-center">
+      <div class="small text-muted">Cheques emitidos</div>
+      <div class="fs-5 fw-bold text-danger">${{ "{:,.0f}".format(total_pagado) }}</div>
+      <div class="small text-muted">cheques propios</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card p-3 text-center">
+      <div class="small text-muted">Gastos</div>
+      <div class="fs-5 fw-bold text-danger">${{ "{:,.0f}".format(total_gastos) }}</div>
+      <div class="small text-muted">manuales + fijos</div>
+    </div>
+  </div>
+</div>
+
+<!-- Resultado neto -->
+<div class="alert {{ 'alert-success' if resultado >= 0 else 'alert-danger' }} mb-4 d-flex justify-content-between align-items-center">
+  <span class="fw-semibold fs-5">Resultado del mes (cobrado – cheques – gastos)</span>
+  <span class="fs-4 fw-bold">${{ "{:,.0f}".format(resultado) }}</span>
+</div>
+
+<!-- Trabajos -->
+<div class="card mb-4">
+  <div class="card-header bg-white fw-semibold">
+    <i class="bi bi-file-earmark-text me-1"></i>Trabajos realizados
+    {% if trabajos_mes %}<span class="badge bg-primary ms-2">{{ trabajos_mes|length }}</span>{% endif %}
+  </div>
+  <div class="card-body p-0">
+    {% if trabajos_mes %}
+    <table class="table table-sm mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Fecha</th><th>Cliente</th><th>Tipo</th><th>Campo/Cultivo</th>
+          <th class="text-end">Ha</th><th class="text-end">$/ha</th>
+          <th class="text-end">Total</th><th>Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in trabajos_mes %}
+        <tr>
+          <td>{{ t.fecha_trabajo or '—' }}</td>
+          <td>{{ t.cliente_nombre }}</td>
+          <td><span class="badge badge-{{ t.tipo }}">{{ t.tipo|capitalize }}</span></td>
+          <td class="small text-muted">{{ t.campo or '' }}{% if t.campo and t.cultivo %}/{% endif %}{{ t.cultivo or '' }}</td>
+          <td class="text-end">{{ "{:,.0f}".format(t.hectareas) }}</td>
+          <td class="text-end">${{ "{:,.0f}".format(t.precio_ha) }}</td>
+          <td class="text-end fw-semibold">${{ "{:,.0f}".format(t.total) }}</td>
+          <td><span class="badge bg-secondary">{{ t.estado|capitalize }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="table-light fw-bold">
+        <tr>
+          <td colspan="6" class="text-end">Total</td>
+          <td class="text-end">${{ "{:,.0f}".format(total_trabajos) }}</td>
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
+    {% else %}
+    <p class="text-muted text-center py-3 mb-0">Sin trabajos en este mes.</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Ingresos cobrados -->
+<div class="card mb-4">
+  <div class="card-header bg-white fw-semibold">
+    <i class="bi bi-check-circle-fill text-success me-1"></i>Ingresos cobrados
+  </div>
+  <div class="card-body p-0">
+    {% if cheques_cobrados or cobros_transfer or facturas_mes or cereales_mes %}
+    <table class="table table-sm mb-0">
+      <thead class="table-light">
+        <tr><th>Fecha</th><th>Tipo</th><th>Descripción</th><th class="text-end">Monto</th></tr>
+      </thead>
+      <tbody>
+        {% for c in cheques_cobrados %}
+        <tr>
+          <td>{{ c.fecha_vencimiento }}</td>
+          <td><span class="badge bg-success">Cheque {{ c.modalidad|upper }}</span></td>
+          <td>{{ c.contraparte }}</td>
+          <td class="text-end fw-semibold text-success">${{ "{:,.0f}".format(c.monto) }}</td>
+        </tr>
+        {% endfor %}
+        {% for c in cobros_transfer %}
+        <tr>
+          <td>{{ c.fecha }}</td>
+          <td><span class="badge {{ 'bg-info text-dark' if c.tipo=='transferencia' else 'bg-secondary' }}">
+            {{ 'Transferencia' if c.tipo=='transferencia' else 'Efectivo' }}</span></td>
+          <td>{{ c.descripcion or (c.cliente_nombre or '—') }}</td>
+          <td class="text-end fw-semibold text-success">${{ "{:,.0f}".format(c.monto) }}</td>
+        </tr>
+        {% endfor %}
+        {% for f in facturas_mes %}
+        <tr>
+          <td>{{ f.fecha_vencimiento }}</td>
+          <td><span class="badge bg-primary">Factura</span></td>
+          <td>{{ f.cliente_nombre }}{% if f.numero %} — N° {{ f.numero }}{% endif %}</td>
+          <td class="text-end fw-semibold text-success">${{ "{:,.0f}".format(f.monto) }}</td>
+        </tr>
+        {% endfor %}
+        {% for v in cereales_mes %}
+        <tr>
+          <td>{{ v.fecha_cobro }}</td>
+          <td><span class="badge bg-warning text-dark">Cereal</span></td>
+          <td>{{ v.cereal|capitalize }}{% if v.comprador %} · {{ v.comprador }}{% endif %}</td>
+          <td class="text-end fw-semibold text-success">${{ "{:,.0f}".format(v.total) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="table-light fw-bold">
+        <tr>
+          <td colspan="3" class="text-end">Total cobrado</td>
+          <td class="text-end text-success">${{ "{:,.0f}".format(total_cobrado) }}</td>
+        </tr>
+      </tfoot>
+    </table>
+    {% else %}
+    <p class="text-muted text-center py-3 mb-0">Sin cobros en este mes.</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Cheques emitidos -->
+<div class="card mb-4">
+  <div class="card-header bg-white fw-semibold">
+    <i class="bi bi-x-circle-fill text-danger me-1"></i>Cheques propios emitidos
+    {% if cheques_pagados %}<span class="badge bg-danger ms-2">{{ cheques_pagados|length }}</span>{% endif %}
+  </div>
+  <div class="card-body p-0">
+    {% if cheques_pagados %}
+    <table class="table table-sm mb-0">
+      <thead class="table-light">
+        <tr><th>Fecha venc.</th><th>A</th><th>Modalidad</th><th>N°</th><th>Estado</th><th class="text-end">Monto</th></tr>
+      </thead>
+      <tbody>
+        {% for c in cheques_pagados %}
+        <tr>
+          <td>{{ c.fecha_vencimiento }}</td>
+          <td>{{ c.contraparte }}</td>
+          <td><span class="badge bg-secondary">{{ c.modalidad|upper }}</span></td>
+          <td class="small text-muted">{{ c.numero or '—' }}</td>
+          <td>
+            {% if c.estado == 'pendiente' %}<span class="badge bg-warning text-dark">Pendiente</span>
+            {% elif c.estado == 'depositado' %}<span class="badge bg-info text-dark">Depositado</span>
+            {% else %}<span class="badge bg-success">Acreditado</span>{% endif %}
+          </td>
+          <td class="text-end fw-semibold text-danger">${{ "{:,.0f}".format(c.monto) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="table-light fw-bold">
+        <tr>
+          <td colspan="5" class="text-end">Total emitido</td>
+          <td class="text-end text-danger">${{ "{:,.0f}".format(total_pagado) }}</td>
+        </tr>
+      </tfoot>
+    </table>
+    {% else %}
+    <p class="text-muted text-center py-3 mb-0">Sin cheques emitidos en este mes.</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Gastos -->
+<div class="card mb-4">
+  <div class="card-header bg-white fw-semibold">
+    <i class="bi bi-receipt me-1"></i>Gastos del mes
+    {% set ng = gastos_mes|length + gastos_fijos_mes|length %}
+    {% if ng %}<span class="badge bg-warning text-dark ms-2">{{ ng }}</span>{% endif %}
+  </div>
+  <div class="card-body p-0">
+    {% if gastos_mes or gastos_fijos_mes %}
+    <table class="table table-sm mb-0">
+      <thead class="table-light">
+        <tr><th>Fecha</th><th>Categoría</th><th>Descripción</th><th>Pago</th><th class="text-end">Monto</th></tr>
+      </thead>
+      <tbody>
+        {% for g in gastos_mes %}
+        <tr>
+          <td>{{ g.fecha }}</td>
+          <td><span class="badge bg-secondary">{{ g.categoria|capitalize }}</span></td>
+          <td>{{ g.descripcion }}</td>
+          <td class="small text-muted">
+            {% if g.tipo_pago == 'cheque_propio' %}Cheque{% if g.cheque_numero %} N° {{ g.cheque_numero }}{% endif %}
+            {% elif g.tipo_pago == 'transferencia' %}Transferencia
+            {% else %}Efectivo{% endif %}
+          </td>
+          <td class="text-end fw-semibold text-danger">${{ "{:,.0f}".format(g.monto) }}</td>
+        </tr>
+        {% endfor %}
+        {% for g in gastos_fijos_mes %}
+        <tr class="table-warning bg-opacity-25">
+          <td>{{ g.fecha }}</td>
+          <td><span class="badge bg-warning text-dark"><i class="bi bi-arrow-repeat me-1"></i>Fijo</span></td>
+          <td>{{ g.descripcion }}</td>
+          <td class="small text-muted">Recurrente</td>
+          <td class="text-end fw-semibold text-danger">${{ "{:,.0f}".format(g.monto) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="table-light fw-bold">
+        <tr>
+          <td colspan="4" class="text-end">Total gastos</td>
+          <td class="text-end text-danger">${{ "{:,.0f}".format(total_gastos) }}</td>
+        </tr>
+      </tfoot>
+    </table>
+    {% else %}
+    <p class="text-muted text-center py-3 mb-0">Sin gastos en este mes.</p>
+    {% endif %}
+  </div>
+</div>
+
+<style>
+@media print {
+  .navbar, form.card, button { display: none !important; }
+  .card { box-shadow: none; border: 1px solid #dee2e6 !important; }
+  body { background: white; }
+}
+</style>
+{% endblock %}

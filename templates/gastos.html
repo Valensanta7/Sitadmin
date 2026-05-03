@@ -1,0 +1,241 @@
+{% extends 'base.html' %}
+{% block title %}Gastos – Contratista Rural{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <h4 class="fw-bold mb-0"><i class="bi bi-receipt me-2"></i>Gastos</h4>
+  <div class="d-flex gap-2">
+    <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalRecurrente">
+      <i class="bi bi-arrow-repeat me-1"></i>Gasto fijo
+    </button>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuevo">
+      <i class="bi bi-plus-lg me-1"></i>Nuevo gasto
+    </button>
+  </div>
+</div>
+
+<!-- Gastos manuales -->
+<div class="card mb-4">
+  <div class="card-header bg-white fw-semibold"><i class="bi bi-receipt me-1"></i>Gastos registrados</div>
+  <div class="card-body p-0">
+    {% if gastos %}
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Fecha</th><th>Categoría</th><th>Descripción</th>
+          <th>Proveedor</th><th>Forma de pago</th>
+          <th class="text-end">Monto</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for g in gastos %}
+        <tr>
+          <td>{{ g.fecha }}</td>
+          <td><span class="badge bg-secondary">{{ g.categoria|capitalize }}</span></td>
+          <td>{{ g.descripcion }}</td>
+          <td class="text-muted small">{{ g.proveedor or '—' }}</td>
+          <td class="small text-muted">
+            {% if g.tipo_pago == 'cheque_propio' %}
+              <i class="bi bi-cash-stack me-1"></i>Cheque propio{% if g.cheque_numero %} N° {{ g.cheque_numero }}{% endif %}
+            {% elif g.tipo_pago == 'transferencia' %}
+              <i class="bi bi-bank me-1"></i>Transferencia
+            {% else %}
+              <i class="bi bi-cash me-1"></i>Efectivo
+            {% endif %}
+          </td>
+          <td class="text-end fw-semibold text-danger">${{ "{:,.0f}".format(g.monto) }}</td>
+          <td>
+            <form method="POST" action="/gastos/{{ g.id }}/eliminar"
+                  onsubmit="return confirm('¿Eliminar este gasto?')">
+              <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="text-center text-muted py-4">
+      <i class="bi bi-receipt fs-1"></i>
+      <p class="mt-2">No hay gastos registrados.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Gastos recurrentes -->
+<div class="card">
+  <div class="card-header bg-white fw-semibold"><i class="bi bi-arrow-repeat me-1"></i>Gastos fijos / recurrentes</div>
+  <div class="card-body p-0">
+    {% if recurrentes %}
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr><th>Descripción</th><th>Categoría</th><th>Frecuencia</th><th class="text-end">Monto</th><th>Estado</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for r in recurrentes %}
+        <tr class="{{ 'text-muted' if not r.activo }}">
+          <td class="fw-semibold">{{ r.descripcion }}</td>
+          <td><span class="badge bg-secondary">{{ r.categoria|capitalize }}</span></td>
+          <td class="small">
+            {{ r.frecuencia|capitalize }}
+            {% if r.frecuencia == 'mensual' and r.dia_mes %} · día {{ r.dia_mes }}{% endif %}
+          </td>
+          <td class="text-end fw-semibold">${{ "{:,.0f}".format(r.monto) }}</td>
+          <td>
+            <form method="POST" action="/gastos/recurrentes/{{ r.id }}/toggle">
+              <button class="btn btn-sm {{ 'btn-success' if r.activo else 'btn-outline-secondary' }}">
+                {{ 'Activo' if r.activo else 'Inactivo' }}
+              </button>
+            </form>
+          </td>
+          <td>
+            <form method="POST" action="/gastos/recurrentes/{{ r.id }}/eliminar"
+                  onsubmit="return confirm('¿Eliminar?')">
+              <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="text-center text-muted py-4">
+      <p class="mb-0 small">No hay gastos fijos cargados. Usá el botón "Gasto fijo" para agregar sueldos, combustible estimado, etc.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Modal nuevo gasto -->
+<div class="modal fade" id="modalNuevo" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <form method="POST" action="/gastos/nuevo" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Nuevo gasto</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Categoría *</label>
+            <select name="categoria" class="form-select" required>
+              <option value="combustible">Combustible</option>
+              <option value="reparacion">Reparación</option>
+              <option value="insumos">Insumos</option>
+              <option value="sueldos">Sueldos</option>
+              <option value="impuestos">Impuestos</option>
+              <option value="otro">Otro</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Fecha *</label>
+            <input type="date" name="fecha" class="form-control" required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Monto ($) *</label>
+            <input type="number" name="monto" class="form-control" step="0.01" min="0" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Descripción *</label>
+            <input type="text" name="descripcion" class="form-control" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Proveedor</label>
+            <input type="text" name="proveedor" class="form-control">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Forma de pago *</label>
+            <select name="tipo_pago" class="form-select" onchange="toggleCheque(this.value)" required>
+              <option value="efectivo">Efectivo</option>
+              <option value="transferencia">Transferencia</option>
+              <option value="cheque_propio">Cheque propio</option>
+            </select>
+          </div>
+          <div class="col-md-6" id="chequeRow" style="display:none">
+            <label class="form-label fw-semibold">Cheque vinculado</label>
+            <select name="cheque_id" class="form-select">
+              <option value="">— Sin vincular —</option>
+              {% for ch in cheques_propios %}
+              <option value="{{ ch.id }}">{{ ch.fecha_vencimiento }} · {{ ch.contraparte }} · ${{ "{:,.0f}".format(ch.monto) }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label fw-semibold">Notas</label>
+            <input type="text" name="notas" class="form-control">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal gasto recurrente -->
+<div class="modal fade" id="modalRecurrente" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="POST" action="/gastos/recurrentes/nuevo" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-arrow-repeat me-1"></i>Nuevo gasto fijo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label fw-semibold">Descripción *</label>
+            <input type="text" name="descripcion" class="form-control" placeholder="Ej: Sueldos empleados" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Categoría *</label>
+            <select name="categoria" class="form-select" required>
+              <option value="sueldos">Sueldos</option>
+              <option value="combustible">Combustible</option>
+              <option value="reparacion">Reparación</option>
+              <option value="insumos">Insumos</option>
+              <option value="impuestos">Impuestos</option>
+              <option value="otro">Otro</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Monto ($) *</label>
+            <input type="number" name="monto" class="form-control" step="0.01" min="0" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Frecuencia *</label>
+            <select name="frecuencia" class="form-select" onchange="toggleDiaMes(this.value)" required>
+              <option value="mensual">Mensual</option>
+              <option value="quincenal">Quincenal (días 1 y 15)</option>
+              <option value="semanal">Semanal</option>
+            </select>
+          </div>
+          <div class="col-md-6" id="diaMesRow">
+            <label class="form-label fw-semibold">Día del mes</label>
+            <input type="number" name="dia_mes" class="form-control" min="1" max="31" placeholder="Ej: 5">
+          </div>
+          <div class="col-12">
+            <label class="form-label fw-semibold">Notas</label>
+            <input type="text" name="notas" class="form-control">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function toggleCheque(val) {
+  document.getElementById('chequeRow').style.display = val === 'cheque_propio' ? '' : 'none';
+}
+function toggleDiaMes(val) {
+  document.getElementById('diaMesRow').style.display = val === 'mensual' ? '' : 'none';
+}
+</script>
+{% endblock %}

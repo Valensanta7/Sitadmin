@@ -1,0 +1,326 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard – Contratista Rural{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <h4 class="fw-bold mb-0">Dashboard</h4>
+  <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalCobro">
+    <i class="bi bi-plus-lg me-1"></i>Registrar cobro
+  </button>
+</div>
+
+<!-- Fila superior: Saldo actual + Mañana + Calculador -->
+<div class="row g-3 mb-4">
+
+  <!-- Saldo actual -->
+  <div class="col-md-4">
+    <div class="card h-100 p-3">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <div class="text-muted small text-uppercase fw-semibold mb-1">Saldo en cuenta ahora</div>
+          <div class="fs-3 fw-bold {{ 'text-success' if saldo_actual >= 0 else 'text-danger' }}">
+            ${{ "{:,.0f}".format(saldo_actual) }}
+          </div>
+          <div class="text-muted small mt-1">Se calcula automáticamente</div>
+        </div>
+        <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalSaldo"
+                title="Ajustar saldo inicial">
+          <i class="bi bi-pencil"></i>
+        </button>
+      </div>
+      <hr class="my-2">
+      <div class="d-flex justify-content-between small">
+        <span class="text-muted">Saldo proyectado (90 días)</span>
+        <span class="fw-bold {{ 'text-success' if saldo_proyectado >= 0 else 'text-danger' }}">
+          ${{ "{:,.0f}".format(saldo_proyectado) }}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Panel Mañana -->
+  <div class="col-md-4">
+    <div class="card h-100 p-3 {{ 'border-danger' if manana_diferencia < 0 }}">
+      <div class="text-muted small text-uppercase fw-semibold mb-2">
+        <i class="bi bi-sunrise me-1"></i>Mañana {{ manana_str }}
+      </div>
+      {% if manana_cheques %}
+        <div class="small mb-2">Cheques a pagar:</div>
+        {% for c in manana_cheques %}
+        <div class="d-flex justify-content-between small mb-1">
+          <span class="text-muted">{{ c.contraparte }}</span>
+          <span class="fw-semibold text-danger">${{ "{:,.0f}".format(c.monto) }}</span>
+        </div>
+        {% endfor %}
+        <hr class="my-2">
+        <div class="d-flex justify-content-between fw-bold">
+          <span>Total a cubrir</span>
+          <span class="text-danger">${{ "{:,.0f}".format(manana_total) }}</span>
+        </div>
+        <div class="d-flex justify-content-between fw-bold mt-1">
+          <span>Saldo actual</span>
+          <span>${{ "{:,.0f}".format(saldo_actual) }}</span>
+        </div>
+        <div class="mt-2 p-2 rounded text-center fw-bold
+            {{ 'bg-success bg-opacity-10 text-success' if manana_diferencia >= 0 else 'bg-danger bg-opacity-10 text-danger' }}">
+          {% if manana_diferencia >= 0 %}
+            <i class="bi bi-check-circle me-1"></i>Te alcanza — sobran ${{ "{:,.0f}".format(manana_diferencia) }}
+          {% else %}
+            <i class="bi bi-x-circle me-1"></i>Te faltan ${{ "{:,.0f}".format(manana_diferencia|abs) }}
+          {% endif %}
+        </div>
+      {% else %}
+        <div class="text-center text-muted py-3">
+          <i class="bi bi-check-circle-fill text-success fs-3"></i>
+          <p class="mt-2 mb-0 small">No vencen cheques mañana</p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Calculador de fecha de cheque -->
+  <div class="col-md-4">
+    <div class="card h-100 p-3">
+      <div class="text-muted small text-uppercase fw-semibold mb-2">
+        <i class="bi bi-calculator me-1"></i>¿Qué fecha pongo en el cheque?
+      </div>
+      <form method="GET" action="/" class="mb-2">
+        <div class="input-group">
+          <span class="input-group-text">$</span>
+          <input type="number" name="monto_calc" class="form-control"
+                 placeholder="Monto del cheque"
+                 value="{{ monto_calc if monto_calc }}"
+                 min="0" step="0.01">
+          <button class="btn btn-primary" type="submit">Ver</button>
+        </div>
+      </form>
+      {% if monto_calc %}
+        {% if fecha_sugerida %}
+          <div class="p-2 rounded bg-success bg-opacity-10 text-center">
+            <div class="small text-muted">Para un cheque de ${{ "{:,.0f}".format(monto_calc) }}</div>
+            <div class="fw-bold text-success fs-5 mt-1">Fecha mínima: {{ fecha_sugerida }}</div>
+            <div class="small text-muted">Saldo ese día: ${{ "{:,.0f}".format(saldo_en_fecha) }}</div>
+          </div>
+        {% else %}
+          <div class="p-2 rounded bg-warning bg-opacity-10 text-center">
+            <i class="bi bi-exclamation-triangle text-warning"></i>
+            <div class="small mt-1">No hay fecha en los próximos 90 días con saldo suficiente para ${{ "{:,.0f}".format(monto_calc) }}</div>
+          </div>
+        {% endif %}
+      {% else %}
+        <div class="text-muted small">
+          Ingresá el monto y el sistema te dice la primera fecha segura considerando
+          facturas, cheques y gastos. Las facturas ya incluyen el margen de {{ margen }} días.
+          <a href="/facturas" class="text-decoration-none">Cambiar margen →</a>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+<!-- Alerta cheques próximos a vencer -->
+{% if alertas %}
+<div class="alert alert-danger alerta-cheque mb-3">
+  <strong><i class="bi bi-exclamation-triangle-fill me-1"></i>Cheques a pagar en los próximos 10 días:</strong>
+  <ul class="mb-0 mt-2">
+    {% for c in alertas %}
+    <li>
+      <strong>{{ c.fecha_vencimiento }}</strong> — {{ c.contraparte }}
+      <span class="badge bg-danger ms-1">${{ "{:,.0f}".format(c.monto) }}</span>
+      <span class="badge bg-secondary ms-1">{{ c.modalidad }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<!-- Alerta cheques propios vencidos sin depositar -->
+{% if propios_vencidos %}
+<div class="alert alert-warning alerta-cheque mb-3">
+  <strong><i class="bi bi-hourglass-split me-1"></i>Cheques propios vencidos — nadie los depositó todavía:</strong>
+  <div class="small text-muted mt-1 mb-2">Ya pasaron su fecha. Pueden presentarlos al cobro en cualquier momento — tené la plata lista.</div>
+  <ul class="mb-0">
+    {% for c in propios_vencidos %}
+    <li>
+      Venció el <strong>{{ c.fecha_vencimiento }}</strong> — {{ c.contraparte }}
+      <span class="badge bg-warning text-dark ms-1">${{ "{:,.0f}".format(c.monto) }}</span>
+      <span class="badge bg-secondary ms-1">{{ c.modalidad }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<!-- Alerta cheques de terceros vencidos sin depositar -->
+{% if terceros_vencidos %}
+<div class="alert alert-info alerta-cheque mb-3">
+  <strong><i class="bi bi-bank me-1"></i>Cheques a cobrar vencidos — pendientes de depositar:</strong>
+  <div class="small text-muted mt-1 mb-2">Ya vencieron y todavía no los depositaste. Andá al banco o marcalos como cobrados.</div>
+  <ul class="mb-0">
+    {% for c in terceros_vencidos %}
+    <li>
+      Venció el <strong>{{ c.fecha_vencimiento }}</strong> — {{ c.contraparte }}
+      <span class="badge bg-info text-dark ms-1">${{ "{:,.0f}".format(c.monto) }}</span>
+      <span class="badge bg-secondary ms-1">{{ c.modalidad }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<!-- Timeline con saldo acumulado -->
+<div class="card">
+  <div class="card-header bg-white fw-semibold">
+    <i class="bi bi-calendar3 me-1"></i>Línea de tiempo
+    <span class="text-muted fw-normal small ms-2">Últimos 30 días y próximos 90 · Saldo arranca desde lo que hay en cuenta hoy</span>
+  </div>
+  <div class="card-body p-0">
+    {% if eventos %}
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Fecha</th>
+          <th>Descripción</th>
+          <th class="text-end">Movimiento</th>
+          <th class="text-end">Saldo acumulado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set hoy_marcado = namespace(value=false) %}
+        {% for e in eventos %}
+          {% if not hoy_marcado.value and e.fecha >= hoy %}
+            {% set hoy_marcado.value = true %}
+            <tr class="table-warning">
+              <td colspan="3" class="fw-bold py-2 small ps-3">
+                <i class="bi bi-arrow-right-circle-fill me-1"></i>HOY — Saldo en cuenta: ${{ "{:,.0f}".format(saldo_actual) }}
+              </td>
+              <td class="text-end fw-bold py-2 pe-3 {{ 'text-success' if saldo_actual >= 0 else 'text-danger' }}">
+                ${{ "{:,.0f}".format(saldo_actual) }}
+              </td>
+            </tr>
+          {% endif %}
+          <tr class="{{ 'text-muted' if e.fecha < hoy }}">
+            <td class="text-nowrap">{{ e.fecha }}</td>
+            <td>
+              {% if e.tipo == 'cheque_salida' %}
+                <span class="badge bg-danger me-1">Cheque a pagar</span>
+              {% elif e.tipo == 'cheque_pagado' %}
+                <span class="badge bg-secondary me-1">Cheque pagado</span>
+              {% elif e.tipo == 'cheque_entrada' %}
+                <span class="badge bg-success me-1">Cheque a cobrar</span>
+              {% elif e.tipo == 'cheque_cobrado' %}
+                <span class="badge bg-secondary me-1">Cheque cobrado</span>
+              {% elif e.tipo == 'cobro_transferencia' %}
+                <span class="badge bg-info text-dark me-1">Transferencia</span>
+              {% elif e.tipo == 'cobro_realizado' %}
+                <span class="badge bg-secondary me-1">Cobro realizado</span>
+              {% elif e.tipo == 'gasto' %}
+                <span class="badge bg-warning text-dark me-1">Gasto</span>
+              {% elif e.tipo == 'gasto_fijo' %}
+                <span class="badge bg-warning text-dark me-1"><i class="bi bi-arrow-repeat me-1"></i>Gasto fijo</span>
+              {% elif e.tipo == 'cereal_pendiente' %}
+                <span class="badge bg-success me-1"><i class="bi bi-basket me-1"></i>Cereal a cobrar</span>
+              {% elif e.tipo == 'cereal_cobrado' %}
+                <span class="badge bg-secondary me-1"><i class="bi bi-basket me-1"></i>Cereal cobrado</span>
+              {% elif e.tipo == 'factura_pendiente' %}
+                <span class="badge bg-primary me-1"><i class="bi bi-file-earmark-check me-1"></i>Factura a cobrar</span>
+              {% elif e.tipo == 'factura_cobrada' %}
+                <span class="badge bg-secondary me-1"><i class="bi bi-file-earmark-check me-1"></i>Factura cobrada</span>
+              {% else %}
+                <span class="badge bg-primary me-1">Cobro trabajo</span>
+              {% endif %}
+              {{ e.descripcion }}
+            </td>
+            <td class="text-end fw-semibold text-nowrap {{ 'text-success' if e.signo == 1 else 'text-danger' }}">
+              {{ '+' if e.signo == 1 else '–' }}${{ "{:,.0f}".format(e.monto) }}
+            </td>
+            <td class="text-end fw-bold text-nowrap {{ 'text-success' if e.saldo_acumulado >= 0 else 'text-danger' }}">
+              ${{ "{:,.0f}".format(e.saldo_acumulado) }}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-inbox fs-1"></i>
+      <p class="mt-2">No hay eventos registrados todavía.</p>
+      <a href="/trabajos" class="btn btn-sm btn-primary me-2">Cargar trabajo</a>
+      <a href="/cheques" class="btn btn-sm btn-outline-secondary me-2">Cargar cheque</a>
+      <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#modalCobro">
+        Registrar cobro
+      </button>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Modal registrar cobro -->
+<div class="modal fade" id="modalCobro" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="POST" action="/cobros/nuevo" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-bank me-1"></i>Registrar cobro</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Tipo *</label>
+            <select name="tipo" class="form-select" required>
+              <option value="transferencia">Transferencia bancaria</option>
+              <option value="efectivo">Efectivo</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Fecha *</label>
+            <input type="date" name="fecha" class="form-control" required>
+          </div>
+          <div class="col-12">
+            <label class="form-label fw-semibold">Descripción</label>
+            <input type="text" name="descripcion" class="form-control" placeholder="Ej: Cobro cosecha Martínez">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Monto ($) *</label>
+            <input type="number" name="monto" class="form-control" step="0.01" min="0" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Notas</label>
+            <input type="text" name="notas" class="form-control">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-success">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal ajustar saldo inicial -->
+<div class="modal fade" id="modalSaldo" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <form method="POST" action="/config/saldo" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Saldo inicial</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted">Ingresá el saldo que había en la cuenta cuando empezaste a usar el sistema. A partir de ahí todo se calcula solo.</p>
+        <div class="input-group">
+          <span class="input-group-text">$</span>
+          <input type="number" name="saldo_inicial" class="form-control"
+                 value="{{ saldo_inicial|int }}" step="1" min="0" required>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
