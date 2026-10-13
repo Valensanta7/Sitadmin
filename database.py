@@ -1,7 +1,7 @@
 import sqlite3
 import os
 
-DB_PATH = os.path.join(os.path.dirname(__file__), 'contratista.db')
+DB_PATH = os.environ.get('SITADMIN_DB') or os.path.join(os.path.dirname(__file__), 'contratista.db')
 
 def get_connection():
     conn = sqlite3.connect(DB_PATH)

@@ -1,3 +1,4 @@
+import os
 from flask import Flask, render_template, request, redirect, url_for
 from database import get_connection, init_db
 from datetime import date, timedelta
@@ -833,4 +834,4 @@ def reporte():
 
 if __name__ == '__main__':
     init_db()
-    app.run(debug=True, port=5050)
+    app.run(debug=os.environ.get('FLASK_DEBUG') == '1', port=5050)
