@@ -1,0 +1,14 @@
+# Base de datos local (datos reales: nunca se suben al repo)
+*.db
+*.sqlite3
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+venv/
+.venv/
+.env
+
+# Sistema
+.DS_Store
